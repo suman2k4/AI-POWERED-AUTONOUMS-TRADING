@@ -8,112 +8,60 @@ import { z } from "zod";
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
-  // Portfolio API
+  // Portfolio API (mocked)
   app.get("/api/portfolio/:userId", async (req, res) => {
-    try {
-      const userId = parseInt(req.params.userId);
-      const portfolio = await storage.getPortfolio(userId);
-      if (!portfolio) {
-        return res.status(404).json({ message: "Portfolio not found" });
-      }
-      res.json(portfolio);
-    } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
-    }
+    res.json({
+      userId: req.params.userId,
+      totalValue: 100000,
+      positions: [],
+      dayGain: 0,
+      dayGainPercent: 0
+    });
   });
 
-  // Stocks API
+  // Stocks API (mocked)
   app.get("/api/stocks", async (req, res) => {
-    try {
-      const stocks = await storage.getAllStocks();
-      res.json(stocks);
-    } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
-    }
+    res.json([
+      { symbol: "AAPL", price: 200 },
+      { symbol: "TSLA", price: 800 },
+      { symbol: "MSFT", price: 350 }
+    ]);
   });
 
   app.get("/api/stocks/top-movers", async (req, res) => {
-    try {
-      const topMovers = await storage.getTopMovers();
-      res.json(topMovers);
-    } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
-    }
+    res.json([
+      { symbol: "TSLA", price: 800, change: 5 },
+      { symbol: "AAPL", price: 200, change: -2 }
+    ]);
   });
 
-  // Trades API
+  // Trades API (mocked)
   app.get("/api/trades/:userId", async (req, res) => {
-    try {
-      const userId = parseInt(req.params.userId);
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
-      const trades = await storage.getUserTrades(userId, limit);
-      res.json(trades);
-    } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
-    }
+    res.json([]);
   });
 
   app.post("/api/trades", async (req, res) => {
-    try {
-      const validatedData = insertTradeSchema.parse(req.body);
-      const trade = await storage.createTrade(validatedData);
-      res.status(201).json(trade);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid trade data", errors: error.errors });
-      }
-      res.status(500).json({ message: "Internal server error" });
-    }
+    res.status(201).json({ message: "Trade created (mock)" });
   });
 
-  // Positions API
+  // Positions API (mocked)
   app.get("/api/positions/:userId", async (req, res) => {
-    try {
-      const userId = parseInt(req.params.userId);
-      const positions = await storage.getUserPositions(userId);
-      res.json(positions);
-    } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
-    }
+    res.json([]);
   });
 
-  // AI Insights API
+  // AI Insights API (mocked)
   app.get("/api/ai-insights/:userId", async (req, res) => {
-    try {
-      const userId = parseInt(req.params.userId);
-      const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
-      const insights = await storage.getUserAiInsights(userId, limit);
-      res.json(insights);
-    } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
-    }
+    res.json([]);
   });
 
-  // Strategies API
+  // Strategies API (mocked)
   app.get("/api/strategies/:userId", async (req, res) => {
-    try {
-      const userId = parseInt(req.params.userId);
-      const strategies = await storage.getUserStrategies(userId);
-      res.json(strategies);
-    } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
-    }
+    res.json([]);
   });
 
-  // User API
+  // User API (mocked)
   app.get("/api/user/:id", async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const user = await storage.getUser(id);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      // Don't send password
-      const { password, ...userWithoutPassword } = user;
-      res.json(userWithoutPassword);
-    } catch (error) {
-      res.status(500).json({ message: "Internal server error" });
-    }
+    res.json({ id: req.params.id, username: "mockuser" });
   });
 
   // WebSocket setup for real-time updates
