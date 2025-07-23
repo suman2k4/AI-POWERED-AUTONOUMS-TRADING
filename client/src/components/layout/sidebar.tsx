@@ -7,7 +7,8 @@ import {
   History, 
   Bot,
   TrendingUp,
-  Settings
+  Settings,
+  GitBranch
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +19,7 @@ const navigation = [
   { path: "/strategies", label: "AI Strategies", icon: Brain },
   { path: "/backtest", label: "Backtesting", icon: History },
   { path: "/chat", label: "AI Assistant", icon: Bot },
+  { path: "/ci-cd", label: "CI/CD Pipeline", icon: GitBranch },
 ];
 
 export function Sidebar() {

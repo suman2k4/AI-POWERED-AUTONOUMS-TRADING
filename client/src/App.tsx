@@ -10,6 +10,7 @@ import Trading from "@/pages/trading";
 import Strategies from "@/pages/strategies";
 import Backtest from "@/pages/backtest";
 import Chat from "@/pages/chat";
+import CICDDashboard from "@/pages/ci-cd-dashboard";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -21,6 +22,7 @@ function Router() {
       <Route path="/strategies" component={Strategies} />
       <Route path="/backtest" component={Backtest} />
       <Route path="/chat" component={Chat} />
+      <Route path="/ci-cd" component={CICDDashboard} />
       {/* Fallback to 404 */}
       <Route component={NotFound} />
     </Switch>
