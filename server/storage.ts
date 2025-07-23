@@ -5,6 +5,8 @@ import {
   type Trade, type InsertTrade, type Strategy, type InsertStrategy,
   type AiInsight, type InsertAiInsight, type PriceHistory, type InsertPriceHistory
 } from "@shared/schema";
+import { db } from "./db";
+import { eq, and } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -270,4 +272,170 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export class DatabaseStorage implements IStorage {
+  async getUser(id: number): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
+    return user;
+  }
+
+  async getPortfolio(userId: number): Promise<Portfolio | undefined> {
+    const [portfolio] = await db.select().from(portfolios).where(eq(portfolios.userId, userId));
+    return portfolio || undefined;
+  }
+
+  async updatePortfolio(userId: number, portfolio: Partial<Portfolio>): Promise<Portfolio | undefined> {
+    const [updated] = await db
+      .update(portfolios)
+      .set({ ...portfolio, updatedAt: new Date() })
+      .where(eq(portfolios.userId, userId))
+      .returning();
+    return updated || undefined;
+  }
+
+  async getAllStocks(): Promise<Stock[]> {
+    return await db.select().from(stocks);
+  }
+
+  async getStock(symbol: string): Promise<Stock | undefined> {
+    const [stock] = await db.select().from(stocks).where(eq(stocks.symbol, symbol));
+    return stock || undefined;
+  }
+
+  async getTopMovers(): Promise<Stock[]> {
+    return await db.select().from(stocks).orderBy(stocks.changePercent).limit(10);
+  }
+
+  async updateStockPrice(symbol: string, price: number, changePercent: number): Promise<void> {
+    await db
+      .update(stocks)
+      .set({
+        currentPrice: price.toString(),
+        changePercent: changePercent.toString(),
+        updatedAt: new Date()
+      })
+      .where(eq(stocks.symbol, symbol));
+  }
+
+  async getUserPositions(userId: number): Promise<(Position & { stock: Stock })[]> {
+    const result = await db
+      .select()
+      .from(positions)
+      .innerJoin(stocks, eq(positions.stockId, stocks.id))
+      .where(eq(positions.userId, userId));
+    
+    return result.map(row => ({
+      ...row.positions,
+      stock: row.stocks
+    }));
+  }
+
+  async getPosition(userId: number, stockId: number): Promise<Position | undefined> {
+    const [position] = await db
+      .select()
+      .from(positions)
+      .where(and(eq(positions.userId, userId), eq(positions.stockId, stockId)));
+    return position || undefined;
+  }
+
+  async updatePosition(id: number, position: Partial<Position>): Promise<Position | undefined> {
+    const [updated] = await db
+      .update(positions)
+      .set({ ...position, updatedAt: new Date() })
+      .where(eq(positions.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async getUserTrades(userId: number, limit: number = 50): Promise<(Trade & { stock: Stock })[]> {
+    const result = await db
+      .select()
+      .from(trades)
+      .innerJoin(stocks, eq(trades.stockId, stocks.id))
+      .where(eq(trades.userId, userId))
+      .orderBy(trades.createdAt)
+      .limit(limit);
+    
+    return result.map(row => ({
+      ...row.trades,
+      stock: row.stocks
+    }));
+  }
+
+  async createTrade(insertTrade: InsertTrade): Promise<Trade> {
+    const [trade] = await db
+      .insert(trades)
+      .values(insertTrade)
+      .returning();
+    return trade;
+  }
+
+  async updateTrade(id: number, trade: Partial<Trade>): Promise<Trade | undefined> {
+    const [updated] = await db
+      .update(trades)
+      .set(trade)
+      .where(eq(trades.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async getUserStrategies(userId: number): Promise<Strategy[]> {
+    return await db.select().from(strategies).where(eq(strategies.userId, userId));
+  }
+
+  async createStrategy(insertStrategy: InsertStrategy): Promise<Strategy> {
+    const [strategy] = await db
+      .insert(strategies)
+      .values(insertStrategy)
+      .returning();
+    return strategy;
+  }
+
+  async getUserAiInsights(userId: number, limit: number = 10): Promise<AiInsight[]> {
+    return await db
+      .select()
+      .from(aiInsights)
+      .where(eq(aiInsights.userId, userId))
+      .orderBy(aiInsights.createdAt)
+      .limit(limit);
+  }
+
+  async createAiInsight(insertInsight: InsertAiInsight): Promise<AiInsight> {
+    const [insight] = await db
+      .insert(aiInsights)
+      .values(insertInsight)
+      .returning();
+    return insight;
+  }
+
+  async getStockPriceHistory(stockId: number, limit: number = 100): Promise<PriceHistory[]> {
+    return await db
+      .select()
+      .from(priceHistory)
+      .where(eq(priceHistory.stockId, stockId))
+      .orderBy(priceHistory.timestamp)
+      .limit(limit);
+  }
+
+  async addPriceHistory(insertPriceHistory: InsertPriceHistory): Promise<PriceHistory> {
+    const [history] = await db
+      .insert(priceHistory)
+      .values(insertPriceHistory)
+      .returning();
+    return history;
+  }
+}
+
+export const storage = new DatabaseStorage();
