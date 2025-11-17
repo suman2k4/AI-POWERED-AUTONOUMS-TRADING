@@ -35,7 +35,8 @@ jobs:
         run: npm run check
       
       - name: Lint
-        run: npm run lint || echo "Lint step completed"
+        run: npm run --if-present lint
+        continue-on-error: true
       
       - name: Build
         run: npm run build
