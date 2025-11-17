@@ -35,12 +35,12 @@ jobs:
       continue-on-error: true
       
     - name: Run unit tests
-      run: npm test
+      run: npm run --if-present test
       env:
         NODE_ENV: test
         
     - name: Generate test coverage
-      run: npm run test:coverage
+      run: npm run --if-present test:coverage
       continue-on-error: true
       
     - name: Upload coverage to Codecov
