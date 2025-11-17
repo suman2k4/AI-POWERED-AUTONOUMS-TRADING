@@ -4,6 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { insertTradeSchema } from "@shared/schema";
 import { z } from "zod";
+import { aiService } from "./ai-service";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -22,16 +23,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Stocks API (mocked)
   app.get("/api/stocks", async (req, res) => {
     res.json([
-      { symbol: "AAPL", price: 200 },
-      { symbol: "TSLA", price: 800 },
-      { symbol: "MSFT", price: 350 }
+      { symbol: "AAPL", price: 200, changePercent: 1.5, name: "Apple Inc." },
+      { symbol: "TSLA", price: 800, changePercent: -2.3, name: "Tesla Inc." },
+      { symbol: "MSFT", price: 350, changePercent: 0.8, name: "Microsoft Corp." },
+      { symbol: "NVDA", price: 450, changePercent: 3.2, name: "NVIDIA Corp." },
+      { symbol: "AMZN", price: 180, changePercent: -0.5, name: "Amazon.com Inc." },
+      { symbol: "GOOGL", price: 140, changePercent: 1.2, name: "Alphabet Inc." }
     ]);
   });
 
   app.get("/api/stocks/top-movers", async (req, res) => {
     res.json([
-      { symbol: "TSLA", price: 800, change: 5 },
-      { symbol: "AAPL", price: 200, change: -2 }
+      { symbol: "NVDA", price: 450, change: 3.2 },
+      { symbol: "AAPL", price: 200, change: 1.5 },
+      { symbol: "GOOGL", price: 140, change: 1.2 },
+      { symbol: "TSLA", price: 800, change: -2.3 }
     ]);
   });
 
@@ -49,9 +55,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json([]);
   });
 
-  // AI Insights API (mocked)
+  // AI Insights API with real Gemini integration
   app.get("/api/ai-insights/:userId", async (req, res) => {
-    res.json([]);
+    try {
+      const userId = parseInt(req.params.userId);
+      
+      // Get mock portfolio context
+      const context = {
+        totalValue: 125000,
+        positions: [],
+        recentTrades: [],
+        stocks: [
+          { symbol: "AAPL", currentPrice: "200", changePercent: "1.5" },
+          { symbol: "TSLA", currentPrice: "800", changePercent: "-2.3" },
+          { symbol: "MSFT", currentPrice: "350", changePercent: "0.8" }
+        ] as any
+      };
+      
+      const insights = await aiService.generateInsights(userId, context);
+      res.json(insights);
+    } catch (error) {
+      console.error("Error generating AI insights:", error);
+      res.status(500).json({ error: "Failed to generate insights" });
+    }
+  });
+
+  // AI Chat endpoint
+  app.post("/api/ai/chat", async (req, res) => {
+    try {
+      const { message, sessionId, context } = req.body;
+      
+      if (!message || !sessionId) {
+        return res.status(400).json({ error: "Message and sessionId are required" });
+      }
+      
+      const response = await aiService.generateChatResponse(message, sessionId, context);
+      res.json({ response, timestamp: new Date().toISOString() });
+    } catch (error) {
+      console.error("Error in AI chat:", error);
+      res.status(500).json({ error: "Failed to process chat message" });
+    }
+  });
+
+  // AI Market Analysis endpoint
+  app.get("/api/ai/market-analysis", async (req, res) => {
+    try {
+      const stocks = [
+        { symbol: "AAPL", currentPrice: "200", changePercent: "1.5" },
+        { symbol: "TSLA", currentPrice: "800", changePercent: "-2.3" },
+        { symbol: "MSFT", currentPrice: "350", changePercent: "0.8" },
+        { symbol: "NVDA", currentPrice: "450", changePercent: "3.2" },
+        { symbol: "AMZN", currentPrice: "180", changePercent: "-0.5" },
+        { symbol: "GOOGL", currentPrice: "140", changePercent: "1.2" }
+      ] as any;
+      
+      const analysis = await aiService.analyzeMarket(stocks);
+      res.json({ analysis, timestamp: new Date().toISOString() });
+    } catch (error) {
+      console.error("Error in market analysis:", error);
+      res.status(500).json({ error: "Failed to generate market analysis" });
+    }
+  });
+
+  // AI Trading Signals endpoint
+  app.get("/api/ai/trading-signals", async (req, res) => {
+    try {
+      const stocks = [
+        { symbol: "AAPL", currentPrice: "200", changePercent: "1.5" },
+        { symbol: "TSLA", currentPrice: "800", changePercent: "-2.3" },
+        { symbol: "MSFT", currentPrice: "350", changePercent: "0.8" }
+      ] as any;
+      
+      const positions = [] as any;
+      
+      const signals = await aiService.generateTradingSignals(stocks, positions);
+      res.json({ signals, timestamp: new Date().toISOString() });
+    } catch (error) {
+      console.error("Error generating trading signals:", error);
+      res.status(500).json({ error: "Failed to generate trading signals" });
+    }
   });
 
   // Strategies API (mocked)

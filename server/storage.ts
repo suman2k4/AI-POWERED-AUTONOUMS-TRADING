@@ -141,7 +141,7 @@ export class MemStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.currentId++;
-    const user: User = { ...insertUser, id, createdAt: new Date() };
+    const user: User = { ...insertUser, id, createdAt: new Date(), plan: insertUser.plan || "Basic" };
     this.users.set(id, user);
     return user;
   }
@@ -218,7 +218,14 @@ export class MemStorage implements IStorage {
 
   async createTrade(insertTrade: InsertTrade): Promise<Trade> {
     const id = this.currentId++;
-    const trade: Trade = { ...insertTrade, id, createdAt: new Date(), executedAt: null };
+    const trade: Trade = { 
+      ...insertTrade, 
+      id, 
+      createdAt: new Date(), 
+      executedAt: null,
+      status: insertTrade.status || "PENDING",
+      orderType: insertTrade.orderType || "MARKET"
+    };
     this.trades.set(id, trade);
     return trade;
   }
@@ -238,7 +245,16 @@ export class MemStorage implements IStorage {
 
   async createStrategy(insertStrategy: InsertStrategy): Promise<Strategy> {
     const id = this.currentId++;
-    const strategy: Strategy = { ...insertStrategy, id, createdAt: new Date(), updatedAt: new Date() };
+    const strategy: Strategy = { 
+      ...insertStrategy, 
+      id, 
+      createdAt: new Date(), 
+      updatedAt: new Date(),
+      description: insertStrategy.description ?? null,
+      parameters: insertStrategy.parameters ?? null,
+      performance: insertStrategy.performance ?? null,
+      isActive: insertStrategy.isActive ?? false
+    };
     this.strategies.set(id, strategy);
     return strategy;
   }
@@ -252,7 +268,15 @@ export class MemStorage implements IStorage {
 
   async createAiInsight(insertInsight: InsertAiInsight): Promise<AiInsight> {
     const id = this.currentId++;
-    const insight: AiInsight = { ...insertInsight, id, createdAt: new Date() };
+    const insight: AiInsight = { 
+      ...insertInsight, 
+      id, 
+      createdAt: new Date(),
+      confidence: insertInsight.confidence ?? null,
+      riskLevel: insertInsight.riskLevel ?? null,
+      timeframe: insertInsight.timeframe ?? null,
+      isRead: insertInsight.isRead ?? false
+    };
     this.aiInsights.set(id, insight);
     return insight;
   }
