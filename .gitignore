@@ -4,3 +4,73 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# Build outputs
+build/
+*.pyc
+__pycache__/
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Go
+execution/bin/
+*.test
+*.out
+
+# Python
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+.ipynb_checkpoints/
+mlruns/
+models/
+*.pkl
+*.joblib
+
+# Data files
+data/
+*.csv
+*.parquet
+*.h5
+*.hdf5
+
+# Environment
+.env
+.env.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Performance reports
+*.cpuprofile
+*.memprofile
+*.trace
+flamegraph.svg
+
+# Test artifacts
+coverage/
+test-results/
+k6-results/
