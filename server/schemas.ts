@@ -1,20 +1,19 @@
-"""
-==============================================================================
-API Server Routes - Enhanced with all trading endpoints
-==============================================================================
-This module adds the following endpoints:
-- POST /api/signals - Generate trading signals
-- GET /api/signals - Retrieve signals
-- POST /api/backtest - Run backtest
-- GET /api/backtest/:id - Get backtest results
-- POST /api/orders - Submit order
-- GET /api/orders - Get order history
-- GET /api/metrics - System metrics
-- POST /api/portfolio/:userId/rebalance - Rebalance portfolio
-==============================================================================
-"""
+/**
+ * ==============================================================================
+ * API Server Schemas - Zod validation schemas for trading endpoints
+ * ==============================================================================
+ * This module provides type-safe validation schemas for:
+ * - POST /api/signals - Generate trading signals
+ * - GET /api/signals - Retrieve signals
+ * - POST /api/backtest - Run backtest
+ * - GET /api/backtest/:id - Get backtest results
+ * - POST /api/orders - Submit order
+ * - GET /api/orders - Get order history
+ * - GET /api/metrics - System metrics
+ * - POST /api/portfolio/:userId/rebalance - Rebalance portfolio
+ * ==============================================================================
+ */
 
-from typing import TypeScript types and schemas
 import { z } from 'zod';
 
 // ==============================================================================
