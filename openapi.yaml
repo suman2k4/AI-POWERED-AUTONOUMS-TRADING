@@ -1,0 +1,698 @@
+openapi: 3.0.3
+info:
+  title: AI-Powered Autonomous Trading Platform API
+  version: 1.0.0
+  description: |
+    Production-grade API for autonomous trading with AI-powered signals, 
+    backtesting, portfolio management, and real-time order execution.
+    
+    ## Performance SLOs
+    - Trade execution latency: < 100ms (p95)
+    - Model prediction accuracy: >= 70%
+    - Portfolio rebalancing: 25% faster than baseline
+    
+  contact:
+    name: Trading Platform Team
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:5001/api
+    description: Development server
+  - url: https://api.trading-platform.example.com/api
+    description: Production server
+
+tags:
+  - name: signals
+    description: AI-generated trading signals
+  - name: backtest
+    description: Backtesting and model evaluation
+  - name: portfolio
+    description: Portfolio management and positions
+  - name: orders
+    description: Order execution and management
+  - name: metrics
+    description: System and performance metrics
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    TradingSignal:
+      type: object
+      required:
+        - symbol
+        - timestamp
+        - action
+        - confidence
+        - price
+        - model_version
+        - model_id
+      properties:
+        symbol:
+          type: string
+          example: "AAPL"
+          description: Stock ticker symbol
+        timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        action:
+          type: string
+          enum: [BUY, SELL, HOLD]
+          description: Trading action recommendation
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+          example: 0.85
+          description: Model confidence score [0-1]
+        price:
+          type: number
+          format: float
+          example: 150.25
+          description: Target price for the action
+        model_version:
+          type: string
+          example: "v1.2.3"
+          description: Version of the model that generated this signal
+        model_id:
+          type: string
+          example: "xgboost-momentum-v1"
+          description: Unique identifier of the model
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Additional signal metadata
+
+    BacktestRequest:
+      type: object
+      required:
+        - strategy
+        - start_date
+        - end_date
+        - initial_capital
+      properties:
+        strategy:
+          type: string
+          example: "momentum-ml"
+          description: Strategy identifier or model ID
+        start_date:
+          type: string
+          format: date
+          example: "2023-01-01"
+        end_date:
+          type: string
+          format: date
+          example: "2023-12-31"
+        initial_capital:
+          type: number
+          format: float
+          example: 100000
+        symbols:
+          type: array
+          items:
+            type: string
+          example: ["AAPL", "GOOGL", "MSFT"]
+        slippage_bps:
+          type: number
+          example: 10
+          description: Slippage in basis points
+        commission_bps:
+          type: number
+          example: 5
+          description: Commission in basis points
+        config:
+          type: object
+          additionalProperties: true
+          description: Strategy-specific configuration
+
+    BacktestResult:
+      type: object
+      properties:
+        backtest_id:
+          type: string
+          example: "bt-123456"
+        strategy:
+          type: string
+        metrics:
+          type: object
+          properties:
+            total_return:
+              type: number
+              example: 0.25
+            sharpe_ratio:
+              type: number
+              example: 1.8
+            max_drawdown:
+              type: number
+              example: -0.15
+            cagr:
+              type: number
+              example: 0.22
+            win_rate:
+              type: number
+              example: 0.65
+            profit_factor:
+              type: number
+              example: 1.8
+        trades_summary:
+          type: object
+          properties:
+            total_trades:
+              type: integer
+            winning_trades:
+              type: integer
+            losing_trades:
+              type: integer
+            avg_win:
+              type: number
+            avg_loss:
+              type: number
+        model_evaluation:
+          type: object
+          properties:
+            accuracy:
+              type: number
+              example: 0.73
+            precision:
+              type: number
+            recall:
+              type: number
+            f1_score:
+              type: number
+            confusion_matrix:
+              type: array
+              items:
+                type: array
+                items:
+                  type: integer
+        equity_curve:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date
+              equity:
+                type: number
+
+    Portfolio:
+      type: object
+      properties:
+        user_id:
+          type: string
+        total_value:
+          type: number
+        cash:
+          type: number
+        buying_power:
+          type: number
+        positions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Position'
+        performance:
+          type: object
+          properties:
+            day_pnl:
+              type: number
+            day_pnl_percent:
+              type: number
+            total_pnl:
+              type: number
+            total_pnl_percent:
+              type: number
+
+    Position:
+      type: object
+      properties:
+        symbol:
+          type: string
+        quantity:
+          type: number
+        avg_cost:
+          type: number
+        current_price:
+          type: number
+        market_value:
+          type: number
+        pnl:
+          type: number
+        pnl_percent:
+          type: number
+
+    OrderRequest:
+      type: object
+      required:
+        - symbol
+        - side
+        - quantity
+        - type
+      properties:
+        symbol:
+          type: string
+          example: "AAPL"
+        side:
+          type: string
+          enum: [buy, sell]
+        quantity:
+          type: number
+          example: 100
+        type:
+          type: string
+          enum: [market, limit, stop, stop_limit]
+        limit_price:
+          type: number
+          description: Required for limit and stop_limit orders
+        stop_price:
+          type: number
+          description: Required for stop and stop_limit orders
+        time_in_force:
+          type: string
+          enum: [day, gtc, ioc, fok]
+          default: day
+        idempotency_key:
+          type: string
+          description: Client-generated UUID for deduplication
+
+    Order:
+      type: object
+      properties:
+        order_id:
+          type: string
+        client_order_id:
+          type: string
+        symbol:
+          type: string
+        side:
+          type: string
+        quantity:
+          type: number
+        type:
+          type: string
+        status:
+          type: string
+          enum: [pending, submitted, filled, partially_filled, cancelled, rejected]
+        filled_quantity:
+          type: number
+        filled_avg_price:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        latency_ms:
+          type: number
+          description: Execution latency in milliseconds
+
+    SystemMetrics:
+      type: object
+      properties:
+        execution_latency:
+          type: object
+          properties:
+            p50:
+              type: number
+            p95:
+              type: number
+            p99:
+              type: number
+        model_performance:
+          type: object
+          properties:
+            accuracy:
+              type: number
+            inference_time_ms:
+              type: number
+        system_health:
+          type: object
+          properties:
+            uptime_seconds:
+              type: number
+            cpu_percent:
+              type: number
+            memory_percent:
+              type: number
+        active_models:
+          type: array
+          items:
+            type: object
+            properties:
+              model_id:
+                type: string
+              version:
+                type: string
+              last_updated:
+                type: string
+                format: date-time
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        code:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+
+security:
+  - ApiKeyAuth: []
+  - BearerAuth: []
+
+paths:
+  /signals:
+    get:
+      summary: Get recent trading signals
+      tags: [signals]
+      parameters:
+        - name: symbol
+          in: query
+          schema:
+            type: string
+          description: Filter by symbol
+        - name: model_id
+          in: query
+          schema:
+            type: string
+          description: Filter by model ID
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 500
+      responses:
+        '200':
+          description: List of trading signals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  signals:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TradingSignal'
+                  count:
+                    type: integer
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      summary: Generate new trading signal
+      tags: [signals]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - symbol
+                - model_id
+              properties:
+                symbol:
+                  type: string
+                model_id:
+                  type: string
+                market_data:
+                  type: object
+                  additionalProperties: true
+      responses:
+        '201':
+          description: Signal generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TradingSignal'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /backtest:
+    post:
+      summary: Run a backtest
+      tags: [backtest]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BacktestRequest'
+      responses:
+        '202':
+          description: Backtest accepted and queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  backtest_id:
+                    type: string
+                  status:
+                    type: string
+                    enum: [queued, running]
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /backtest/{backtest_id}:
+    get:
+      summary: Get backtest results
+      tags: [backtest]
+      parameters:
+        - name: backtest_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Backtest results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BacktestResult'
+        '404':
+          description: Backtest not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /portfolio/{user_id}:
+    get:
+      summary: Get user portfolio
+      tags: [portfolio]
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Portfolio data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Portfolio'
+        '404':
+          description: Portfolio not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /portfolio/{user_id}/rebalance:
+    post:
+      summary: Trigger portfolio rebalancing
+      tags: [portfolio]
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                target_allocation:
+                  type: object
+                  additionalProperties:
+                    type: number
+                strategy:
+                  type: string
+                  enum: [baseline, optimized]
+                  default: optimized
+      responses:
+        '202':
+          description: Rebalancing accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rebalance_id:
+                    type: string
+                  status:
+                    type: string
+                  estimated_trades:
+                    type: integer
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /orders:
+    post:
+      summary: Submit a new order
+      tags: [orders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderRequest'
+      responses:
+        '201':
+          description: Order submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      summary: Get order history
+      tags: [orders]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: symbol
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Order'
+                  count:
+                    type: integer
+
+  /orders/{order_id}:
+    get:
+      summary: Get order details
+      tags: [orders]
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '404':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      summary: Cancel an order
+      tags: [orders]
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Order cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '404':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /metrics:
+    get:
+      summary: Get system metrics
+      tags: [metrics]
+      responses:
+        '200':
+          description: System metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemMetrics'

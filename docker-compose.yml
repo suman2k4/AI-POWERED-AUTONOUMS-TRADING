@@ -1,0 +1,290 @@
+# ==============================================================================
+# AI-Powered Autonomous Trading Platform - Docker Compose (Development)
+# ==============================================================================
+# This compose file sets up the complete development environment including:
+# - TimescaleDB for time-series data
+# - Redis for caching and streams
+# - Kafka for event bus
+# - MLflow for model tracking
+# - Prometheus for metrics
+# - Grafana for dashboards
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # TimescaleDB - Time-series database for historical ticks and OHLC data
+  # ---------------------------------------------------------------------------
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: trading-timescaledb
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: trading_timeseries
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescale-data:/var/lib/postgresql/data
+      - ./infra/sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - trading-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Redis - Caching, inference cache, and Redis Streams
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: trading-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - trading-network
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Zookeeper - Required for Kafka
+  # ---------------------------------------------------------------------------
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: trading-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - trading-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Kafka - Event bus for market ticks, signals, and audit logs
+  # ---------------------------------------------------------------------------
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: trading-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      - trading-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # MLflow - Model registry and experiment tracking
+  # ---------------------------------------------------------------------------
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.9.2
+    container_name: trading-mlflow
+    ports:
+      - "5000:5000"
+    environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql://postgres:password@timescaledb:5432/mlflow
+      MLFLOW_DEFAULT_ARTIFACT_ROOT: /mlflow/artifacts
+    volumes:
+      - mlflow-data:/mlflow/artifacts
+    networks:
+      - trading-network
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    command: >
+      bash -c "
+        pip install psycopg2-binary &&
+        mlflow server 
+          --backend-store-uri postgresql://postgres:password@timescaledb:5432/mlflow
+          --default-artifact-root /mlflow/artifacts
+          --host 0.0.0.0
+          --port 5000
+      "
+
+  # ---------------------------------------------------------------------------
+  # Prometheus - Metrics collection
+  # ---------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: trading-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    networks:
+      - trading-network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+
+  # ---------------------------------------------------------------------------
+  # Grafana - Metrics visualization
+  # ---------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:latest
+    container_name: trading-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - trading-network
+    depends_on:
+      - prometheus
+
+  # ---------------------------------------------------------------------------
+  # Jaeger - Distributed tracing
+  # ---------------------------------------------------------------------------
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: trading-jaeger
+    ports:
+      - "5775:5775/udp"
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686"
+      - "14268:14268"
+      - "14250:14250"
+      - "9411:9411"
+    environment:
+      COLLECTOR_ZIPKIN_HOST_PORT: :9411
+    networks:
+      - trading-network
+
+  # ---------------------------------------------------------------------------
+  # Execution Engine (Go) - Low-latency order execution
+  # ---------------------------------------------------------------------------
+  execution-engine:
+    build:
+      context: ./execution
+      dockerfile: Dockerfile
+    container_name: trading-execution
+    ports:
+      - "8080:8080"
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_STREAM: execution.orders
+      PROMETHEUS_PORT: 9091
+      LOG_LEVEL: info
+    networks:
+      - trading-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # API Server (Node.js + TypeScript + Express)
+  # ---------------------------------------------------------------------------
+  api-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: trading-api
+    ports:
+      - "5001:5001"
+    environment:
+      NODE_ENV: development
+      PORT: 5001
+      DATABASE_URL: postgresql://postgres:password@timescaledb:5432/trading_timeseries
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BROKERS: kafka:29092
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      EXECUTION_ENGINE_HOST: execution-engine
+      EXECUTION_ENGINE_PORT: 8080
+    volumes:
+      - ./server:/app/server
+      - ./shared:/app/shared
+      - /app/node_modules
+    networks:
+      - trading-network
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # ML Service (Python) - Training and inference
+  # ---------------------------------------------------------------------------
+  ml-service:
+    build:
+      context: ./ml
+      dockerfile: Dockerfile
+    container_name: trading-ml
+    ports:
+      - "8000:8000"
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      DATABASE_URL: postgresql://postgres:password@timescaledb:5432/trading_timeseries
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      PYTHONUNBUFFERED: 1
+    volumes:
+      - ./ml:/app/ml
+      - ml-models:/app/models
+    networks:
+      - trading-network
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mlflow:
+        condition: service_started
+    restart: unless-stopped
+
+networks:
+  trading-network:
+    driver: bridge
+
+volumes:
+  timescale-data:
+  redis-data:
+  mlflow-data:
+  prometheus-data:
+  grafana-data:
+  ml-models:

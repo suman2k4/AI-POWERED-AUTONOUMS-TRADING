@@ -1,0 +1,350 @@
+# ==============================================================================
+# Kubernetes Deployment - Production Configuration
+# ==============================================================================
+# This manifest deploys the complete trading platform to Kubernetes
+# Apply with: kubectl apply -f deployment.yaml
+# ==============================================================================
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: trading-platform
+
+---
+# ConfigMap for shared configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trading-config
+  namespace: trading-platform
+data:
+  MLFLOW_TRACKING_URI: "http://mlflow:5000"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  KAFKA_BROKERS: "kafka:9092"
+  LOG_LEVEL: "info"
+
+---
+# Execution Engine Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: execution-engine
+  namespace: trading-platform
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: execution-engine
+  template:
+    metadata:
+      labels:
+        app: execution-engine
+    spec:
+      containers:
+      - name: execution-engine
+        image: trading-execution:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: http
+        - containerPort: 9091
+          name: metrics
+        env:
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: trading-config
+              key: REDIS_HOST
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: trading-config
+              key: REDIS_PORT
+        resources:
+          requests:
+            cpu: 500m
+            memory: 512Mi
+          limits:
+            cpu: 2000m
+            memory: 2Gi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+# Execution Engine Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: execution-engine
+  namespace: trading-platform
+spec:
+  selector:
+    app: execution-engine
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+  - name: metrics
+    port: 9091
+    targetPort: 9091
+  type: ClusterIP
+
+---
+# Execution Engine HPA
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: execution-engine-hpa
+  namespace: trading-platform
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: execution-engine
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Pods
+    pods:
+      metric:
+        name: execution_latency_milliseconds
+      target:
+        type: AverageValue
+        averageValue: "100"
+
+---
+# API Server Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-server
+  namespace: trading-platform
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api-server
+  template:
+    metadata:
+      labels:
+        app: api-server
+    spec:
+      containers:
+      - name: api-server
+        image: trading-api:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5001
+          name: http
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "5001"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: trading-secrets
+              key: database-url
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: trading-config
+              key: REDIS_HOST
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 5001
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 5001
+          initialDelaySeconds: 10
+          periodSeconds: 10
+
+---
+# API Server Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-server
+  namespace: trading-platform
+spec:
+  selector:
+    app: api-server
+  ports:
+  - port: 5001
+    targetPort: 5001
+  type: LoadBalancer
+
+---
+# ML Service Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-service
+  namespace: trading-platform
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ml-service
+  template:
+    metadata:
+      labels:
+        app: ml-service
+    spec:
+      containers:
+      - name: ml-service
+        image: trading-ml:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: MLFLOW_TRACKING_URI
+          valueFrom:
+            configMapKeyRef:
+              name: trading-config
+              key: MLFLOW_TRACKING_URI
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: trading-config
+              key: REDIS_HOST
+        resources:
+          requests:
+            cpu: 1000m
+            memory: 2Gi
+            nvidia.com/gpu: 0
+          limits:
+            cpu: 4000m
+            memory: 8Gi
+            nvidia.com/gpu: 1
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 20
+          periodSeconds: 10
+
+---
+# ML Service Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml-service
+  namespace: trading-platform
+spec:
+  selector:
+    app: ml-service
+  ports:
+  - port: 8000
+    targetPort: 8000
+  type: ClusterIP
+
+---
+# Redis StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: trading-platform
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+          name: redis
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+  volumeClaimTemplates:
+  - metadata:
+      name: redis-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 10Gi
+
+---
+# Redis Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: trading-platform
+spec:
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+  clusterIP: None
+
+---
+# Prometheus ServiceMonitor for metrics scraping
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: trading-platform
+  namespace: trading-platform
+spec:
+  selector:
+    matchLabels:
+      monitored: "true"
+  endpoints:
+  - port: metrics
+    interval: 15s
